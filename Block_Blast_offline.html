@@ -1,0 +1,1365 @@
+<html lang="en"><head></head><body class="mobile"><head<link rel="manifest" href="manifest.json">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>&gt;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Block Blast</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { overscroll-behavior: none; }
+  body {
+    background: #1a0a2e;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Only block touch scrolling on the interactive game surfaces */
+  #canvas-wrap, .piece-slot, #piece-area, #game-area {
+    touch-action: none;
+  }
+
+  /* === MOBILE LAYOUT (default) === */
+  body.mobile {
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  body.mobile #header {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px 6px;
+    gap: 10px;
+  }
+  body.mobile #title { font-size: 22px; }
+  body.mobile #score { font-size: 24px; }
+  body.mobile #best-row { flex-direction: row; width: 100%; max-width: 420px; padding: 0 16px 6px; }
+  body.mobile #game-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+  /* mobile board size: min(92vw, 360px) */
+  body.mobile #canvas-wrap {
+    width: min(92vw, 360px);
+    aspect-ratio: 1 / 1;
+    margin: 4px auto;
+  }
+  body.mobile #grid-canvas, body.mobile #fx-canvas {
+    width: 100%; height: 100%;
+  }
+  body.mobile #piece-area {
+    width: min(92vw, 360px);
+    height: min(28vw, 120px);
+    flex-direction: row;
+    margin: 6px auto 0;
+  }
+  body.mobile .piece-slot {
+    width: 30%;
+    max-width: 110px;
+    height: 100%;
+  }
+  body.mobile .piece-slot canvas {
+    width: 90%;
+    height: 90%;
+  }
+
+  /* === COMPUTER LAYOUT === */
+  body.computer { justify-content: center; }
+  body.computer #header {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 28px 8px;
+    gap: 16px;
+  }
+  body.computer #title { font-size: 34px; }
+  body.computer #score { font-size: 34px; }
+  body.computer #best-row {
+    width: 100%; max-width: 900px;
+    padding: 0 28px 12px;
+  }
+  body.computer #game-area {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+    padding: 0 28px;
+  }
+  body.computer #canvas-wrap {
+    width: 520px; height: 520px;
+    margin: 0;
+  }
+  body.computer #grid-canvas, body.computer #fx-canvas {
+    width: 520px; height: 520px;
+  }
+  body.computer #piece-area {
+    width: 180px;
+    height: 520px;
+    flex-direction: column;
+    margin: 0;
+    justify-content: space-around;
+    gap: 12px;
+  }
+  body.computer .piece-slot {
+    width: 160px;
+    height: 150px;
+  }
+  body.computer .piece-slot canvas { width: auto; height: auto; }
+
+  #title { color: #fff; font-weight: 800; letter-spacing: 1px; text-shadow: 0 0 20px #a855f7; }
+  #header-right { display: flex; align-items: center; gap: 10px; }
+  #score-box { text-align: right; }
+  #score-label { color: #a78bfa; font-size: 10px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+  #score { color: #fff; font-weight: 800; line-height: 1; transition: transform 0.15s, color 0.15s; }
+  #score.pulse { transform: scale(1.35); color: #fbbf24; }
+  #new-game-btn {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 8px 12px; font-size: 11px; font-weight: 800;
+    cursor: pointer; letter-spacing: 1px;
+    box-shadow: 0 4px 16px rgba(168,85,247,0.4);
+    transition: transform 0.1s, box-shadow 0.1s;
+    display: flex; align-items: center; gap: 5px;
+    touch-action: manipulation;
+  }
+  #new-game-btn:active { transform: scale(0.95); }
+  #new-game-btn svg { width: 13px; height: 13px; }
+
+  #best-row { display: flex; gap: 10px; align-items: center; }
+  .stat { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 6px 12px; }
+  .stat-label { color: #a78bfa; font-size: 9px; font-weight: 600; letter-spacing: 1px; }
+  .stat-val { color: #fff; font-size: 15px; font-weight: 700; }
+  #undo-btn {
+    margin-left: auto;
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    color: #1a0a2e; border: none; border-radius: 10px;
+    padding: 8px 14px; font-size: 12px; font-weight: 800;
+    cursor: pointer; letter-spacing: 1px;
+    box-shadow: 0 4px 16px rgba(251,191,36,0.4);
+    transition: transform 0.1s, box-shadow 0.1s, opacity 0.2s;
+    display: none;
+    align-items: center; gap: 5px;
+    touch-action: manipulation;
+  }
+  #undo-btn.visible { display: flex; }
+  #undo-btn:active:not(:disabled) { transform: scale(0.95); }
+  #undo-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #undo-btn svg { width: 13px; height: 13px; }
+
+  #canvas-wrap {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #0f0720;
+    box-shadow: 0 0 40px rgba(168,85,247,0.3), inset 0 0 60px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+  #grid-canvas { display: block; position: absolute; top: 0; left: 0; }
+  #fx-canvas { display: block; position: absolute; top: 0; left: 0; pointer-events: none; }
+  #piece-area {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .piece-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1.5px solid rgba(255,255,255,0.07);
+    transition: transform 0.1s, box-shadow 0.1s;
+    cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .piece-slot.used { opacity: 0.3; }
+  .piece-slot.spawn-anim { animation: spawnPiece 0.35s ease-out; }
+  @keyframes spawnPiece {
+    0% { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+    60% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .piece-slot canvas { pointer-events: none; }
+
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,4,24,0.95);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  #overlay h1 { color: #fff; font-size: 42px; font-weight: 900; letter-spacing: 2px; margin-bottom: 8px; text-shadow: 0 0 30px #a855f7; animation: titleGlow 2s ease-in-out infinite alternate; text-align: center; }
+  @keyframes titleGlow {
+    0% { text-shadow: 0 0 20px #a855f7, 0 0 40px rgba(168,85,247,0.5); }
+    100% { text-shadow: 0 0 30px #ec4899, 0 0 60px rgba(236,72,153,0.7); }
+  }
+  #overlay .sub { color: #a78bfa; font-size: 16px; margin-bottom: 6px; text-align: center; }
+  #overlay .final-score { color: #fff; font-size: 56px; font-weight: 900; margin: 10px 0 24px; animation: scoreBounce 0.6s ease-out; }
+  @keyframes scoreBounce {
+    0% { transform: scale(0.3); opacity: 0; }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  #layout-switch-wrap {
+    margin: 18px 0 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  #layout-switch-label {
+    color: #a78bfa; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  }
+  #layout-switch {
+    display: flex;
+    background: rgba(255,255,255,0.06);
+    border: 1.5px solid rgba(168,85,247,0.3);
+    border-radius: 999px;
+    padding: 4px;
+    gap: 4px;
+    position: relative;
+  }
+  .layout-opt {
+    background: transparent;
+    color: #a78bfa;
+    border: none;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 999px;
+    transition: color 0.25s, background 0.25s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    touch-action: manipulation;
+  }
+  .layout-opt svg { width: 16px; height: 16px; }
+  .layout-opt.active {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(168,85,247,0.5);
+  }
+  .layout-opt:active { transform: scale(0.96); }
+
+  .difficulty-row {
+    display: flex; gap: 16px; margin-top: 16px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .diff-btn {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    color: #fff; border: none; border-radius: 16px;
+    padding: 18px 32px; font-size: 18px; font-weight: 800;
+    cursor: pointer; letter-spacing: 1px;
+    box-shadow: 0 8px 32px rgba(168,85,247,0.5);
+    transition: transform 0.15s, box-shadow 0.15s;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    min-width: 140px;
+    touch-action: manipulation;
+  }
+  .diff-btn.easy { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 8px 32px rgba(16,185,129,0.5); }
+  .diff-btn.normal { background: linear-gradient(135deg, #7c3aed, #a855f7); box-shadow: 0 8px 32px rgba(168,85,247,0.5); }
+  .diff-btn:active { transform: scale(0.96); }
+  .diff-btn .diff-sub { font-size: 11px; font-weight: 600; opacity: 0.85; letter-spacing: 0.5px; }
+
+  #combo-display {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fbbf24; font-size: 32px; font-weight: 900;
+    pointer-events: none; text-shadow: 0 0 20px #fbbf24;
+    opacity: 0; transition: none; z-index: 10;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-4px, 3px); }
+    40% { transform: translate(4px, -3px); }
+    60% { transform: translate(-3px, -3px); }
+    80% { transform: translate(3px, 3px); }
+  }
+  .shake { animation: shake 0.35s ease-in-out; }
+
+  .score-pop {
+    position: absolute;
+    pointer-events: none;
+    font-weight: 900;
+    font-size: 22px;
+    color: #fbbf24;
+    text-shadow: 0 0 12px rgba(251,191,36,0.9), 0 2px 4px rgba(0,0,0,0.5);
+    z-index: 11;
+    animation: scorePop 0.9s ease-out forwards;
+  }
+  @keyframes scorePop {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    20% { transform: translate(-50%, -60%) scale(1.2); opacity: 1; }
+    100% { transform: translate(-50%, -140%) scale(0.9); opacity: 0; }
+  }
+</style>
+
+
+
+<div id="header">
+  <div id="title">BLOCK BLAST</div>
+  <div id="header-right">
+    <div id="score-box">
+      <div id="score-label">SCORE</div>
+      <div id="score">0</div>
+    </div>
+    <button id="new-game-btn" title="New Game">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M3 21v-5h5"></path></svg>
+      NEW
+    </button>
+  </div>
+</div>
+<div id="best-row">
+  <div class="stat"><div class="stat-label">BEST</div><div class="stat-val" id="best">2245</div></div>
+  <div class="stat"><div class="stat-label">LINES</div><div class="stat-val" id="lines">0</div></div>
+  <button id="undo-btn" title="Undo last move">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg>
+    UNDO
+  </button>
+</div>
+
+<div id="game-area">
+  <div id="canvas-wrap">
+    <canvas id="grid-canvas" width="360" height="360"></canvas>
+    <canvas id="fx-canvas" width="360" height="360"></canvas>
+    <div id="combo-display"></div>
+  </div>
+
+  <div id="piece-area">
+    <div class="piece-slot" id="slot0" data-slot="0"><canvas id="pc0" width="100" height="110"></canvas></div>
+    <div class="piece-slot" id="slot1" data-slot="1"><canvas id="pc1" width="100" height="110"></canvas></div>
+    <div class="piece-slot" id="slot2" data-slot="2"><canvas id="pc2" width="100" height="110"></canvas></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <h1 id="overlay-title">BLOCK BLAST</h1>
+  <div class="sub" id="overlay-sub">Choose your difficulty</div>
+  <div class="final-score" id="final-score" style="display:none"></div>
+
+  <div id="layout-switch-wrap">
+    <div id="layout-switch-label">Layout</div>
+    <div id="layout-switch">
+      <button class="layout-opt active" data-layout="mobile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.5"></rect><line x1="11" y1="18" x2="13" y2="18"></line></svg>
+        MOBILE
+      </button>
+      <button class="layout-opt" data-layout="computer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        COMPUTER
+      </button>
+    </div>
+  </div>
+
+  <div class="difficulty-row" id="difficulty-row">
+    <button class="diff-btn easy" data-diff="easy">
+      EASY
+      <span class="diff-sub">WITH UNDO</span>
+    </button>
+    <button class="diff-btn normal" data-diff="normal">
+      NORMAL
+      <span class="diff-sub">CLASSIC</span>
+    </button>
+  </div>
+</div>
+
+<script>
+const COLS = 8, ROWS = 8;
+const canvas = document.getElementById('grid-canvas');
+const ctx = canvas.getContext('2d');
+const fxCanvas = document.getElementById('fx-canvas');
+const fxCtx = fxCanvas.getContext('2d');
+const canvasWrap = document.getElementById('canvas-wrap');
+
+const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+// Internal canvas resolution (fixed)
+let CELL = 45; // default mobile
+let CANVAS_SIZE = 360;
+let PIECE_CANVAS_W = 100;
+let PIECE_CANVAS_H = 110;
+let PIECE_TARGET = 90;
+let PIECE_MAX_CELL = 22;
+let DRAG_CELL = 45; // size used when rendering floating drag canvas (matches grid cell visually)
+
+function applyLayout(layoutName) {
+  currentLayout = layoutName;
+  document.body.classList.remove('mobile', 'computer');
+  document.body.classList.add(layoutName);
+
+  if (layoutName === 'computer') {
+    CANVAS_SIZE = 520;
+    CELL = CANVAS_SIZE / COLS; // 65
+    PIECE_CANVAS_W = 150;
+    PIECE_CANVAS_H = 140;
+    PIECE_TARGET = 130;
+    PIECE_MAX_CELL = 32;
+  } else {
+    CANVAS_SIZE = 360;
+    CELL = CANVAS_SIZE / COLS; // 45
+    PIECE_CANVAS_W = 100;
+    PIECE_CANVAS_H = 110;
+    PIECE_TARGET = 90;
+    PIECE_MAX_CELL = 22;
+  }
+
+  canvas.width = CANVAS_SIZE;
+  canvas.height = CANVAS_SIZE;
+  fxCanvas.width = CANVAS_SIZE;
+  fxCanvas.height = CANVAS_SIZE;
+
+  for (let i = 0; i < 3; i++) {
+    const pc = document.getElementById('pc' + i);
+    pc.width = PIECE_CANVAS_W;
+    pc.height = PIECE_CANVAS_H;
+  }
+
+  drawGrid();
+  drawAllPieces();
+}
+
+const COLORS = [
+  { fill: '#ef4444', stroke: '#fca5a5', glow: 'rgba(239,68,68,0.6)' },
+  { fill: '#f97316', stroke: '#fdba74', glow: 'rgba(249,115,22,0.6)' },
+  { fill: '#eab308', stroke: '#fde047', glow: 'rgba(234,179,8,0.6)' },
+  { fill: '#22c55e', stroke: '#86efac', glow: 'rgba(34,197,94,0.6)' },
+  { fill: '#06b6d4', stroke: '#67e8f9', glow: 'rgba(6,182,212,0.6)' },
+  { fill: '#3b82f6', stroke: '#93c5fd', glow: 'rgba(59,130,246,0.6)' },
+  { fill: '#8b5cf6', stroke: '#c4b5fd', glow: 'rgba(139,92,246,0.6)' },
+  { fill: '#ec4899', stroke: '#f9a8d4', glow: 'rgba(236,72,153,0.6)' },
+];
+
+const PIECES = [
+  [[1,1,1,1,1]],
+  [[1,1,1,1]],
+  [[1,1,1]],
+  [[1,1]],
+  [[1]],
+  [[1,1],[1,1]],
+  [[1,1,1],[1,1,1],[1,1,1]],
+  [[1,1,1],[1,0,0],[1,0,0]],
+  [[1,1,1],[0,0,1],[0,0,1]],
+  [[1,0],[1,0],[1,1]],
+  [[0,1],[0,1],[1,1]],
+  [[1,1,1],[1,1,1]],
+  [[1,1],[1,1],[1,1]],
+  [[0,1,0],[1,1,1]],
+  [[1,0,0],[1,1,1]],
+  [[0,0,1],[1,1,1]],
+  [[1,1,0],[0,1,1]],
+  [[0,1,1],[1,1,0]],
+  [[1,0],[1,1],[0,1]],
+  [[0,1],[1,1],[1,0]],
+  [[1,1,1,1,1]],
+  [[1],[1],[1],[1],[1]],
+  [[1],[1],[1],[1]],
+  [[1],[1],[1]],
+  [[1,1,0],[1,1,0],[0,0,0]],
+  [[1,1,1,1],[1,1,1,1]],
+  [[1,1],[1,1],[1,1],[1,1]],
+];
+
+let grid = [], gridColor = [];
+let pieces = [null, null, null];
+let pieceColors = [0, 0, 0];
+let score = 0, best = 0, totalLines = 0;
+let dragging = null;
+let ghostRow = -1, ghostCol = -1;
+let gameActive = false;
+let difficulty = 'normal';
+let currentLayout = 'mobile';
+let undoState = null;
+let placeAnims = [];
+let previewClearCells = new Set();
+
+// Drag-specific state
+let dragCanvas = null;
+let dragDw = 0, dragDh = 0;
+let dragTouchYOffset = 0; // offset above finger so user sees piece on touch
+
+let particles = [];
+let popEffects = [];
+let fxRunning = false;
+
+function initGrid() {
+  grid = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+  gridColor = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+}
+
+function randPiece() { return PIECES[Math.floor(Math.random() * PIECES.length)]; }
+function randColor() { return Math.floor(Math.random() * COLORS.length); }
+
+function spawnPieces() {
+  for (let i = 0; i < 3; i++) {
+    if (pieces[i] === null) {
+      pieces[i] = randPiece();
+      pieceColors[i] = randColor();
+    }
+  }
+  drawAllPieces();
+  for (let i = 0; i < 3; i++) {
+    const slot = document.getElementById('slot' + i);
+    slot.classList.remove('spawn-anim');
+    void slot.offsetWidth;
+    slot.classList.add('spawn-anim');
+  }
+}
+
+function canPlace(piece, row, col) {
+  for (let r = 0; r < piece.length; r++) {
+    for (let c = 0; c < piece[r].length; c++) {
+      if (piece[r][c]) {
+        let nr = row + r, nc = col + c;
+        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return false;
+        if (grid[nr][nc]) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function placePiece(piece, row, col, colorIdx) {
+  const placed = [];
+  for (let r = 0; r < piece.length; r++) {
+    for (let c = 0; c < piece[r].length; c++) {
+      if (piece[r][c]) {
+        grid[row + r][col + c] = 1;
+        gridColor[row + r][col + c] = colorIdx;
+        placed.push([row + r, col + c]);
+      }
+    }
+  }
+  const now = performance.now();
+  placed.forEach(([r, c], i) => {
+    placeAnims.push({ r, c, start: now + i * 25, duration: 260 });
+  });
+  ensureFxRunning();
+}
+
+function computePreviewClear(piece, row, col) {
+  const simFilled = new Set();
+  for (let r = 0; r < piece.length; r++) {
+    for (let c = 0; c < piece[r].length; c++) {
+      if (piece[r][c]) simFilled.add((row + r) + '_' + (col + c));
+    }
+  }
+  const isFilled = (r, c) => grid[r][c] === 1 || simFilled.has(r + '_' + c);
+
+  const clearedCells = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    let full = true;
+    for (let c = 0; c < COLS; c++) { if (!isFilled(r, c)) { full = false; break; } }
+    if (full) for (let c = 0; c < COLS; c++) clearedCells.add(r + '_' + c);
+  }
+  for (let c = 0; c < COLS; c++) {
+    let full = true;
+    for (let r = 0; r < ROWS; r++) { if (!isFilled(r, c)) { full = false; break; } }
+    if (full) for (let r = 0; r < ROWS; r++) clearedCells.add(r + '_' + c);
+  }
+  return clearedCells;
+}
+
+function clearLines() {
+  let clearedLines = [];
+  for (let r = 0; r < ROWS; r++) {
+    if (grid[r].every(v => v)) clearedLines.push({ type: 'row', idx: r });
+  }
+  for (let c = 0; c < COLS; c++) {
+    if (grid.every(row => row[c])) clearedLines.push({ type: 'col', idx: c });
+  }
+  if (clearedLines.length === 0) return 0;
+
+  let cellMap = new Map();
+  for (let cl of clearedLines) {
+    if (cl.type === 'row') {
+      for (let c = 0; c < COLS; c++) cellMap.set(cl.idx + '_' + c, { r: cl.idx, c, colorIdx: gridColor[cl.idx][c] });
+    } else {
+      for (let r = 0; r < ROWS; r++) cellMap.set(r + '_' + cl.idx, { r, c: cl.idx, colorIdx: gridColor[r][cl.idx] });
+    }
+  }
+  const cells = [...cellMap.values()];
+  triggerPop(cells, clearedLines);
+
+  for (let cl of clearedLines) {
+    if (cl.type === 'row') {
+      for (let c = 0; c < COLS; c++) { grid[cl.idx][c] = 0; gridColor[cl.idx][c] = 0; }
+    } else {
+      for (let r = 0; r < ROWS; r++) { grid[r][cl.idx] = 0; gridColor[r][cl.idx] = 0; }
+    }
+  }
+  return clearedLines.length;
+}
+
+function triggerPop(cells, clearedLines) {
+  const now = performance.now();
+  let cxSum = 0, cySum = 0;
+  for (let cell of cells) { cxSum += cell.c; cySum += cell.r; }
+  const cRow = cySum / cells.length;
+  const cCol = cxSum / cells.length;
+
+  for (let cell of cells) {
+    const dist = Math.hypot(cell.c - cCol, cell.r - cRow);
+    const delay = dist * 25;
+    const col = COLORS[cell.colorIdx];
+
+    popEffects.push({
+      row: cell.r, col: cell.c, colorIdx: cell.colorIdx,
+      start: now + delay, duration: 420,
+    });
+
+    const x = cell.c * CELL + CELL / 2;
+    const y = cell.r * CELL + CELL / 2;
+    const pCount = 9;
+    for (let i = 0; i < pCount; i++) {
+      const angle = (Math.PI * 2 * i) / pCount + Math.random() * 0.5;
+      const speed = 90 + Math.random() * 160;
+      particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40,
+        life: 0, maxLife: 600 + Math.random() * 220,
+        size: 3 + Math.random() * 4,
+        color: col.fill, glow: col.glow,
+        start: now + delay,
+      });
+    }
+    for (let i = 0; i < 4; i++) {
+      particles.push({
+        x: x + (Math.random() - 0.5) * CELL * 0.5,
+        y: y + (Math.random() - 0.5) * CELL * 0.5,
+        vx: (Math.random() - 0.5) * 70,
+        vy: (Math.random() - 0.5) * 70 - 50,
+        life: 0, maxLife: 450 + Math.random() * 200,
+        size: 2 + Math.random() * 2,
+        color: '#ffffff', glow: 'rgba(255,255,255,0.95)',
+        start: now + delay, sparkle: true,
+      });
+    }
+  }
+
+  canvasWrap.classList.remove('shake');
+  void canvasWrap.offsetWidth;
+  canvasWrap.classList.add('shake');
+
+  const scoreEl = document.getElementById('score');
+  scoreEl.classList.remove('pulse');
+  void scoreEl.offsetWidth;
+  scoreEl.classList.add('pulse');
+  setTimeout(() => scoreEl.classList.remove('pulse'), 200);
+
+  ensureFxRunning();
+}
+
+function ensureFxRunning() {
+  if (!fxRunning) {
+    fxRunning = true;
+    requestAnimationFrame(fxLoop);
+  }
+}
+
+function spawnScorePop(canvasX, canvasY, text) {
+  const rect = canvasWrap.getBoundingClientRect();
+  const scaleX = rect.width / CANVAS_SIZE;
+  const scaleY = rect.height / CANVAS_SIZE;
+  const el = document.createElement('div');
+  el.className = 'score-pop';
+  el.textContent = text;
+  el.style.left = (rect.left + canvasX * scaleX) + 'px';
+  el.style.top = (rect.top + canvasY * scaleY) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 950);
+}
+
+function fxLoop(ts) {
+  fxCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+  placeAnims = placeAnims.filter(pa => {
+    const elapsed = ts - pa.start;
+    if (elapsed < 0) return true;
+    const t = elapsed / pa.duration;
+    if (t >= 1) return false;
+    const scale = t < 0.5 ? 0.4 + (t / 0.5) * 0.75 : 1.15 - ((t - 0.5) / 0.5) * 0.15;
+    const colIdx = (gridColor[pa.r] && gridColor[pa.r][pa.c] !== undefined) ? gridColor[pa.r][pa.c] : 0;
+    const col = COLORS[colIdx];
+    const cx = pa.c * CELL + CELL / 2;
+    const cy = pa.r * CELL + CELL / 2;
+    const size = CELL * scale;
+    const alpha = 1 - t * 0.25;
+    fxCtx.save();
+    fxCtx.globalAlpha = alpha * 0.75;
+    fxCtx.shadowColor = col.glow;
+    fxCtx.shadowBlur = 14 * (1 - t);
+    fxCtx.fillStyle = 'rgba(255,255,255,' + (0.35 * (1 - t)) + ')';
+    fxCtx.beginPath();
+    fxCtx.roundRect(cx - size / 2 + 2, cy - size / 2 + 2, size - 4, size - 4, 6);
+    fxCtx.fill();
+    fxCtx.restore();
+    return true;
+  });
+
+  popEffects = popEffects.filter(pe => {
+    const elapsed = ts - pe.start;
+    if (elapsed < 0) return true;
+    const t = elapsed / pe.duration;
+    if (t >= 1) return false;
+    const col = COLORS[pe.colorIdx];
+    const cx = pe.col * CELL + CELL / 2;
+    const cy = pe.row * CELL + CELL / 2;
+
+    if (t < 0.3) {
+      const p = t / 0.3;
+      const scale = 1 + p * 0.7;
+      const alpha = 1 - p * 0.4;
+      const size = CELL * scale;
+      fxCtx.save();
+      fxCtx.globalAlpha = alpha;
+      fxCtx.shadowColor = col.glow;
+      fxCtx.shadowBlur = 22;
+      fxCtx.fillStyle = col.fill;
+      fxCtx.beginPath();
+      fxCtx.roundRect(cx - size / 2 + 2, cy - size / 2 + 2, size - 4, size - 4, 6);
+      fxCtx.fill();
+      fxCtx.globalAlpha = alpha * (1 - p);
+      fxCtx.fillStyle = '#ffffff';
+      fxCtx.beginPath();
+      fxCtx.roundRect(cx - size / 2 + 2, cy - size / 2 + 2, size - 4, size - 4, 6);
+      fxCtx.fill();
+      fxCtx.restore();
+    }
+
+    const ringR = t * CELL * 1.5;
+    const ringAlpha = (1 - t) * 0.9;
+    fxCtx.save();
+    fxCtx.globalAlpha = ringAlpha;
+    fxCtx.strokeStyle = col.fill;
+    fxCtx.lineWidth = 3 * (1 - t) + 1;
+    fxCtx.shadowColor = col.glow;
+    fxCtx.shadowBlur = 12;
+    fxCtx.beginPath();
+    fxCtx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    fxCtx.stroke();
+    fxCtx.globalAlpha = ringAlpha * 0.5;
+    fxCtx.lineWidth = 2 * (1 - t);
+    fxCtx.beginPath();
+    fxCtx.arc(cx, cy, ringR * 0.7, 0, Math.PI * 2);
+    fxCtx.stroke();
+    fxCtx.restore();
+    return true;
+  });
+
+  const dt = 16 / 1000;
+  particles = particles.filter(p => {
+    if (ts < p.start) return true;
+    p.life += 16;
+    if (p.life >= p.maxLife) return false;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 300 * dt;
+    p.vx *= 0.985;
+    const lifeT = p.life / p.maxLife;
+    const alpha = 1 - lifeT;
+    fxCtx.save();
+    fxCtx.globalAlpha = alpha;
+    fxCtx.shadowColor = p.glow;
+    fxCtx.shadowBlur = p.sparkle ? 14 : 9;
+    fxCtx.fillStyle = p.color;
+    const sz = p.size * (p.sparkle ? (1 - lifeT * 0.5) : (1 - lifeT * 0.3));
+    fxCtx.beginPath();
+    fxCtx.arc(p.x, p.y, sz, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.restore();
+    return true;
+  });
+
+  if (popEffects.length > 0 || particles.length > 0 || placeAnims.length > 0) {
+    requestAnimationFrame(fxLoop);
+  } else {
+    fxRunning = false;
+    fxCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  }
+}
+
+function drawCell(x, y, colorIdx, alpha = 1, glow = true, overrideColorIdx = null) {
+  const col = COLORS[overrideColorIdx !== null ? overrideColorIdx : colorIdx];
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (glow) {
+    ctx.shadowColor = col.glow;
+    ctx.shadowBlur = 12;
+  }
+  const pad = 2, r = 6;
+  const rx = x + pad, ry = y + pad, rw = CELL - pad * 2, rh = CELL - pad * 2;
+  ctx.beginPath();
+  ctx.roundRect(rx, ry, rw, rh, r);
+  ctx.fillStyle = col.fill;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  const grad = ctx.createLinearGradient(rx, ry, rx, ry + rh * 0.5);
+  grad.addColorStop(0, 'rgba(255,255,255,0.22)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(rx, ry, rw, rh * 0.55, [r, r, 0, 0]);
+  ctx.fill();
+  ctx.strokeStyle = col.stroke;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(rx, ry, rw, rh, r);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawGrid() {
+  ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath(); ctx.moveTo(0, r * CELL); ctx.lineTo(CANVAS_SIZE, r * CELL); ctx.stroke();
+  }
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath(); ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, CANVAS_SIZE); ctx.stroke();
+  }
+
+  const hoverColorIdx = (dragging !== null) ? pieceColors[dragging] : null;
+  const pulseAlpha = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c]) {
+        const key = r + '_' + c;
+        if (previewClearCells.has(key) && hoverColorIdx !== null) {
+          drawCell(c * CELL, r * CELL, gridColor[r][c], 0.55);
+          drawCell(c * CELL, r * CELL, hoverColorIdx, 0.55 + 0.4 * pulseAlpha);
+        } else {
+          drawCell(c * CELL, r * CELL, gridColor[r][c]);
+        }
+      }
+    }
+  }
+
+  if (dragging !== null && ghostRow >= 0 && ghostCol >= 0) {
+    const piece = pieces[dragging];
+    const col = COLORS[pieceColors[dragging]];
+    ctx.globalAlpha = 0.35 + 0.25 * pulseAlpha;
+    for (let r = 0; r < piece.length; r++) {
+      for (let c = 0; c < piece[r].length; c++) {
+        if (piece[r][c]) {
+          const x = (ghostCol + c) * CELL, y = (ghostRow + r) * CELL;
+          ctx.fillStyle = col.fill;
+          ctx.beginPath();
+          ctx.roundRect(x + 2, y + 2, CELL - 4, CELL - 4, 5);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    if (previewClearCells.size > 0) {
+      ctx.save();
+      ctx.strokeStyle = col.stroke;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = col.glow;
+      ctx.shadowBlur = 10;
+      ctx.globalAlpha = 0.7 + 0.3 * pulseAlpha;
+      for (let key of previewClearCells) {
+        const [rr, cc] = key.split('_').map(Number);
+        if (!grid[rr][cc]) continue;
+        ctx.beginPath();
+        ctx.roundRect(cc * CELL + 2, rr * CELL + 2, CELL - 4, CELL - 4, 6);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+}
+
+function drawPiece(canvasEl, piece, colorIdx) {
+  const pc = canvasEl.getContext('2d');
+  pc.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  if (!piece) return;
+  const rows = piece.length, cols = Math.max(...piece.map(r => r.length));
+  const cellSize = Math.min(Math.floor(PIECE_TARGET / Math.max(rows, cols)), PIECE_MAX_CELL);
+  const totalW = cols * cellSize, totalH = rows * cellSize;
+  const ox = (canvasEl.width - totalW) / 2, oy = (canvasEl.height - totalH) / 2;
+  const col = COLORS[colorIdx];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < piece[r].length; c++) {
+      if (piece[r][c]) {
+        const x = ox + c * cellSize, y = oy + r * cellSize;
+        const pad = 1.5, rr = 4;
+        pc.shadowColor = col.glow; pc.shadowBlur = 8;
+        pc.fillStyle = col.fill;
+        pc.beginPath();
+        pc.roundRect(x + pad, y + pad, cellSize - pad * 2, cellSize - pad * 2, rr);
+        pc.fill();
+        pc.shadowBlur = 0;
+        const grad = pc.createLinearGradient(x, y, x, y + cellSize * 0.5);
+        grad.addColorStop(0, 'rgba(255,255,255,0.25)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        pc.fillStyle = grad;
+        pc.beginPath();
+        pc.roundRect(x + pad, y + pad, cellSize - pad * 2, (cellSize - pad * 2) * 0.55, [rr, rr, 0, 0]);
+        pc.fill();
+        pc.strokeStyle = col.stroke; pc.lineWidth = 1.2;
+        pc.beginPath();
+        pc.roundRect(x + pad, y + pad, cellSize - pad * 2, cellSize - pad * 2, rr);
+        pc.stroke();
+      }
+    }
+  }
+}
+
+function drawAllPieces() {
+  for (let i = 0; i < 3; i++) {
+    const slot = document.getElementById('slot' + i);
+    slot.classList.toggle('used', pieces[i] === null);
+    drawPiece(document.getElementById('pc' + i), pieces[i], pieceColors[i]);
+  }
+}
+
+function updateScore(pts) {
+  score += pts;
+  if (score > best) { best = score; try { localStorage.setItem('bb_best', best); } catch(e){} }
+  document.getElementById('score').textContent = score;
+  document.getElementById('best').textContent = best;
+}
+
+function updateLines(n) {
+  totalLines += n;
+  document.getElementById('lines').textContent = totalLines;
+}
+
+// Convert client (viewport) coordinates into grid cell coordinates,
+// accounting for CSS scaling of the canvas.
+function getCenterGridPos(clientX, clientY, piece) {
+  const rect = canvas.getBoundingClientRect();
+  const scale = rect.width / CANVAS_SIZE;
+  const effectiveCell = CELL * scale; // CSS pixels per grid cell
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const pCols = Math.max(...piece.map(r => r.length));
+  const pRows = piece.length;
+  const col = Math.round((x - pCols * effectiveCell / 2) / effectiveCell);
+  const row = Math.round((y - pRows * effectiveCell / 2) / effectiveCell);
+  return { col, row };
+}
+
+function startDrag(idx, clientX, clientY) {
+  if (pieces[idx] === null) return;
+  dragging = idx;
+  const piece = pieces[idx];
+  const pCols = Math.max(...piece.map(r => r.length));
+  const pRows = piece.length;
+
+  // Compute CSS-px cell size from canvas rect
+  const rect = canvas.getBoundingClientRect();
+  const scale = rect.width / CANVAS_SIZE;
+  const cssCell = CELL * scale;
+  DRAG_CELL = cssCell;
+
+  if (dragCanvas) dragCanvas.remove();
+  dragCanvas = document.createElement('canvas');
+  const dpr = window.devicePixelRatio || 1;
+  const dwCss = pCols * cssCell + 10;
+  const dhCss = pRows * cssCell + 10;
+  dragDw = dwCss;
+  dragDh = dhCss;
+  dragCanvas.width = dwCss * dpr;
+  dragCanvas.height = dhCss * dpr;
+  dragCanvas.style.cssText = `position:fixed;pointer-events:none;z-index:999;opacity:0.92;width:${dwCss}px;height:${dhCss}px;left:0;top:0;transform:translate(0,0);`;
+  document.body.appendChild(dragCanvas);
+  const dc = dragCanvas.getContext('2d');
+  dc.scale(dpr, dpr);
+  const col = COLORS[pieceColors[idx]];
+  for (let r = 0; r < piece.length; r++) {
+    for (let c = 0; c < piece[r].length; c++) {
+      if (piece[r][c]) {
+        const x = c * cssCell, y = r * cssCell;
+        dc.shadowColor = col.glow; dc.shadowBlur = 16;
+        dc.fillStyle = col.fill;
+        dc.beginPath();
+        dc.roundRect(x + 3, y + 3, cssCell - 6, cssCell - 6, 7);
+        dc.fill();
+        dc.shadowBlur = 0;
+        const grad = dc.createLinearGradient(x, y, x, y + cssCell * 0.5);
+        grad.addColorStop(0, 'rgba(255,255,255,0.25)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+        dc.fillStyle = grad;
+        dc.beginPath();
+        dc.roundRect(x + 3, y + 3, cssCell - 6, (cssCell - 6) * 0.55, [7, 7, 0, 0]);
+        dc.fill();
+        dc.strokeStyle = col.stroke; dc.lineWidth = 2;
+        dc.beginPath();
+        dc.roundRect(x + 3, y + 3, cssCell - 6, cssCell - 6, 7);
+        dc.stroke();
+      }
+    }
+  }
+
+  // On touch, offset piece well above the finger so the user can see it.
+  // The POINTER position still represents the piece center for drop logic.
+  dragTouchYOffset = IS_TOUCH ? (pRows * cssCell * 0.5 + cssCell * 1.6) : 0;
+
+  moveDragCanvas(clientX, clientY);
+  ensurePreviewLoop();
+}
+
+function moveDragCanvas(clientX, clientY) {
+  if (!dragCanvas) return;
+  // The drag canvas visually represents the piece centered at (clientX, clientY - offset)
+  const visualCenterY = clientY - dragTouchYOffset;
+  const left = clientX - dragDw / 2;
+  const top = visualCenterY - dragDh / 2;
+  dragCanvas.style.left = left + 'px';
+  dragCanvas.style.top = top + 'px';
+
+  if (dragging !== null) {
+    const piece = pieces[dragging];
+    // Drop target is where the piece VISUAL is, not where the finger is
+    const { col, row } = getCenterGridPos(clientX, visualCenterY, piece);
+    if (canPlace(piece, row, col)) {
+      ghostRow = row; ghostCol = col;
+      previewClearCells = computePreviewClear(piece, row, col);
+    } else {
+      ghostRow = -1; ghostCol = -1;
+      previewClearCells = new Set();
+    }
+  }
+}
+
+let previewLoopRunning = false;
+function ensurePreviewLoop() {
+  if (previewLoopRunning) return;
+  previewLoopRunning = true;
+  const loop = () => {
+    if (dragging === null) {
+      previewLoopRunning = false;
+      drawGrid();
+      return;
+    }
+    drawGrid();
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
+function endDrag(clientX, clientY) {
+  if (dragging === null) return;
+  if (dragCanvas) { dragCanvas.remove(); dragCanvas = null; }
+  const piece = pieces[dragging];
+  const pieceColorIdx = pieceColors[dragging];
+  const visualCenterY = clientY - dragTouchYOffset;
+  const { col, row } = getCenterGridPos(clientX, visualCenterY, piece);
+  ghostRow = -1; ghostCol = -1;
+  previewClearCells = new Set();
+
+  if (canPlace(piece, row, col)) {
+    undoState = {
+      grid: grid.map(r => r.slice()),
+      gridColor: gridColor.map(r => r.slice()),
+      pieces: pieces.map(p => p),
+      pieceColors: pieceColors.slice(),
+      score, totalLines,
+    };
+    if (difficulty === 'easy') {
+      const btn = document.getElementById('undo-btn');
+      btn.disabled = false;
+      btn.style.opacity = '';
+    }
+
+    placePiece(piece, row, col, pieceColorIdx);
+    const pieceBlocks = piece.flat().filter(v => v).length;
+    updateScore(pieceBlocks);
+    pieces[dragging] = null;
+
+    const n = clearLines();
+    if (n > 0) {
+      const lineScore = [0, 100, 250, 450, 700, 1000][Math.min(n, 5)];
+      const gain = lineScore * n;
+      updateScore(gain);
+      updateLines(n);
+      showCombo(n);
+      spawnScorePop(CANVAS_SIZE / 2, CANVAS_SIZE / 2, '+' + gain);
+    }
+    drawGrid();
+    if (pieces.every(p => p === null)) spawnPieces();
+    else drawAllPieces();
+    setTimeout(() => checkGameOver(), 320);
+  } else {
+    drawGrid();
+  }
+  dragging = null;
+  dragTouchYOffset = 0;
+}
+
+function showCombo(n) {
+  const el = document.getElementById('combo-display');
+  const msgs = ['', 'NICE!', 'GREAT!', 'AWESOME!', 'COMBO!', 'INSANE!'];
+  el.textContent = msgs[Math.min(n, 5)];
+  el.style.opacity = '1';
+  el.style.transform = 'translate(-50%, -50%) scale(1.4)';
+  el.style.transition = 'none';
+  setTimeout(() => {
+    el.style.transition = 'opacity 0.7s, transform 0.7s';
+    el.style.opacity = '0';
+    el.style.transform = 'translate(-50%, -90%) scale(0.9)';
+  }, 50);
+}
+
+function checkGameOver() {
+  for (let i = 0; i < 3; i++) {
+    if (pieces[i] === null) continue;
+    const piece = pieces[i];
+    for (let r = 0; r <= ROWS - piece.length; r++) {
+      for (let c = 0; c <= COLS - Math.max(...piece.map(row => row.length)); c++) {
+        if (canPlace(piece, r, c)) return;
+      }
+    }
+  }
+  endGame();
+}
+
+function endGame() {
+  gameActive = false;
+  const ov = document.getElementById('overlay');
+  document.getElementById('overlay-title').textContent = 'GAME OVER';
+  document.getElementById('overlay-sub').textContent = 'Final Score';
+  document.getElementById('final-score').style.display = 'block';
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('difficulty-row').style.display = 'flex';
+  document.getElementById('layout-switch-wrap').style.display = 'flex';
+  ov.style.display = 'flex';
+}
+
+function startGame(diff) {
+  difficulty = diff;
+  score = 0; totalLines = 0;
+  undoState = null;
+  document.getElementById('score').textContent = '0';
+  document.getElementById('lines').textContent = '0';
+  try { best = parseInt(localStorage.getItem('bb_best') || '0'); } catch(e){ best = 0; }
+  document.getElementById('best').textContent = best;
+  initGrid();
+  pieces = [null, null, null];
+  particles = [];
+  popEffects = [];
+  placeAnims = [];
+  previewClearCells = new Set();
+  fxCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  spawnPieces();
+  drawGrid();
+
+  const undoBtn = document.getElementById('undo-btn');
+  if (difficulty === 'easy') {
+    undoBtn.classList.add('visible');
+    undoBtn.disabled = true;
+  } else {
+    undoBtn.classList.remove('visible');
+  }
+
+  document.getElementById('overlay').style.display = 'none';
+  gameActive = true;
+}
+
+function showStartScreen() {
+  gameActive = false;
+  const ov = document.getElementById('overlay');
+  document.getElementById('overlay-title').textContent = 'BLOCK BLAST';
+  document.getElementById('overlay-sub').textContent = 'Choose your difficulty';
+  document.getElementById('final-score').style.display = 'none';
+  document.getElementById('difficulty-row').style.display = 'flex';
+  document.getElementById('layout-switch-wrap').style.display = 'flex';
+  ov.style.display = 'flex';
+}
+
+// === Events ===
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => startGame(btn.dataset.diff));
+});
+
+document.querySelectorAll('.layout-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const layout = btn.dataset.layout;
+    if (layout === currentLayout) return;
+    document.querySelectorAll('.layout-opt').forEach(b => b.classList.toggle('active', b.dataset.layout === layout));
+    try { localStorage.setItem('bb_layout', layout); } catch(e){}
+    applyLayout(layout);
+  });
+});
+
+document.getElementById('new-game-btn').addEventListener('click', () => {
+  if (dragCanvas) { dragCanvas.remove(); dragCanvas = null; }
+  dragging = null;
+  showStartScreen();
+});
+
+document.getElementById('undo-btn').addEventListener('click', () => {
+  if (!undoState || difficulty !== 'easy') return;
+  grid = undoState.grid.map(r => r.slice());
+  gridColor = undoState.gridColor.map(r => r.slice());
+  pieces = undoState.pieces.map(p => p);
+  pieceColors = undoState.pieceColors.slice();
+  score = undoState.score;
+  totalLines = undoState.totalLines;
+  document.getElementById('score').textContent = score;
+  document.getElementById('lines').textContent = totalLines;
+  document.getElementById('best').textContent = best;
+  undoState = null;
+  document.getElementById('undo-btn').disabled = true;
+  particles = [];
+  popEffects = [];
+  placeAnims = [];
+  fxCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  drawGrid();
+  drawAllPieces();
+});
+
+function getSlotIdxFromEl(el) {
+  if (!el) return -1;
+  const slot = el.closest ? el.closest('.piece-slot') : null;
+  if (!slot) return -1;
+  const idx = parseInt(slot.dataset.slot, 10);
+  return isNaN(idx) ? -1 : idx;
+}
+
+// --- Pointer Events (modern, works on iOS 13+, Android, desktop) ---
+let activePointerId = null;
+
+function onPointerDown(e) {
+  if (!gameActive) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  // Skip buttons
+  if (e.target.closest && (e.target.closest('#new-game-btn') || e.target.closest('#undo-btn'))) return;
+  const idx = getSlotIdxFromEl(e.target);
+  if (idx < 0 || pieces[idx] === null) return;
+  activePointerId = e.pointerId;
+  startDrag(idx, e.clientX, e.clientY);
+  e.preventDefault();
+}
+
+function onPointerMove(e) {
+  if (dragging === null) return;
+  if (activePointerId !== null && e.pointerId !== activePointerId) return;
+  moveDragCanvas(e.clientX, e.clientY);
+  e.preventDefault();
+}
+
+function onPointerUp(e) {
+  if (dragging === null) return;
+  if (activePointerId !== null && e.pointerId !== activePointerId) return;
+  endDrag(e.clientX, e.clientY);
+  activePointerId = null;
+}
+
+function onPointerCancel(e) {
+  if (dragging === null) return;
+  if (dragCanvas) { dragCanvas.remove(); dragCanvas = null; }
+  dragging = null;
+  ghostRow = -1; ghostCol = -1;
+  previewClearCells = new Set();
+  activePointerId = null;
+  drawGrid();
+}
+
+// Attach Pointer Events if supported, otherwise fall back to touch+mouse
+if (window.PointerEvent) {
+  // Attach pointerdown to piece slots only so buttons still tap normally
+  document.querySelectorAll('.piece-slot').forEach(slot => {
+    slot.addEventListener('pointerdown', onPointerDown);
+  });
+  window.addEventListener('pointermove', onPointerMove, { passive: false });
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerCancel);
+} else {
+  // Fallback: mouse + touch
+  document.querySelectorAll('.piece-slot').forEach(slot => {
+    slot.addEventListener('mousedown', e => {
+      if (!gameActive) return;
+      const idx = getSlotIdxFromEl(e.target);
+      if (idx >= 0) { startDrag(idx, e.clientX, e.clientY); e.preventDefault(); }
+    });
+    slot.addEventListener('touchstart', e => {
+      if (!gameActive) return;
+      const t = e.touches[0];
+      const idx = getSlotIdxFromEl(e.target);
+      if (idx >= 0) { e.preventDefault(); startDrag(idx, t.clientX, t.clientY); }
+    }, { passive: false });
+  });
+  document.addEventListener('mousemove', e => {
+    if (dragging !== null) moveDragCanvas(e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseup', e => {
+    if (dragging !== null) endDrag(e.clientX, e.clientY);
+  });
+  document.addEventListener('touchmove', e => {
+    if (dragging !== null) { e.preventDefault(); const t = e.touches[0]; moveDragCanvas(t.clientX, t.clientY); }
+  }, { passive: false });
+  document.addEventListener('touchend', e => {
+    if (dragging !== null) { const t = e.changedTouches[0]; endDrag(t.clientX, t.clientY); }
+  });
+  document.addEventListener('touchcancel', onPointerCancel);
+}
+
+// Prevent iOS Safari bounce / default zoom gestures on the game area
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('touchmove', e => {
+  // Prevent page scroll/bounce only when dragging
+  if (dragging !== null) e.preventDefault();
+}, { passive: false });
+
+// Recalculate layout on resize / orientation change
+window.addEventListener('resize', () => {
+  drawGrid();
+  drawAllPieces();
+});
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { drawGrid(); drawAllPieces(); }, 200);
+});
+
+// Initial setup
+try { best = parseInt(localStorage.getItem('bb_best') || '0'); } catch(e){ best = 0; }
+document.getElementById('best').textContent = best;
+
+// Auto-detect default layout
+let savedLayout = null;
+try { savedLayout = localStorage.getItem('bb_layout'); } catch(e){}
+let defaultLayout;
+if (savedLayout === 'mobile' || savedLayout === 'computer') {
+  defaultLayout = savedLayout;
+} else {
+  defaultLayout = (IS_TOUCH || window.innerWidth < 760) ? 'mobile' : 'computer';
+}
+document.querySelectorAll('.layout-opt').forEach(b => b.classList.toggle('active', b.dataset.layout === defaultLayout));
+applyLayout(defaultLayout);
+
+showStartScreen();
+</script>
+
+
+
+
+
+</head<link></body></html>
